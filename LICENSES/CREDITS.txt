@@ -1,0 +1,12 @@
+PENDING — Chapter 0 demo
+
+Made with Godot Engine (https://godotengine.org). MIT license; see GODOT.txt
+for the engine license and its third-party components.
+
+Fonts: subsets of Source Han Serif CN (Adobe) and IBM Plex Mono (IBM),
+renamed "PENDING Serif" / "PENDING Mono" as required for modified versions
+under the SIL Open Font License 1.1; see LICENSE-SourceHanSerif.txt and
+LICENSE-IBMPlexMono.txt. The few geometric symbols in "PENDING Glyphs" were
+drawn for this demo.
+
+All sounds are synthesized in code when the game starts.
