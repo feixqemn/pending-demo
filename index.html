@@ -1,220 +1,225 @@
 <!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>PENDING</title>
-		<style>
-html, body, #canvas {
-	margin: 0;
-	padding: 0;
-	border: 0;
-}
-
-body {
-	color: white;
-	background-color: black;
-	overflow: hidden;
-	touch-action: none;
-}
-
-#canvas {
-	display: block;
-}
-
-#canvas:focus {
-	outline: none;
-}
-
-#status, #status-splash, #status-progress {
-	position: absolute;
-	left: 0;
-	right: 0;
-}
-
-#status, #status-splash {
-	top: 0;
-	bottom: 0;
-}
-
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+<title>PENDING</title>
+<style>
+/* The PENDING loader: dark paper; lights fall like snow and land as her line of footprints, one print
+   for each part loaded, climbing toward the pass. Loaded: the prints brighten, the snow keeps falling
+   and the page sinks away into the game, which starts from black. */
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { background: #070605; color: #e6dfcf; overflow: hidden; touch-action: none; }
+#canvas { display: block; }
+#canvas:focus { outline: none; }
 #status {
-	background-color: #000000;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	visibility: hidden;
+	position: absolute; inset: 0; background: #0d0b09; z-index: 2;
+	transition: opacity 1.6s cubic-bezier(.45,0,.2,1);
 }
-
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
+#status.leaving { opacity: 0; pointer-events: none; }
+#loader { position: absolute; inset: 0; width: 100%; height: 100%; }
+#words {
+	position: absolute; left: 0; right: 0; bottom: 9vh; text-align: center;
+	font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+	transition: opacity 1.0s ease;
 }
-
-#status-splash.show-image--false {
-	display: none;
+#name { font-size: 15px; letter-spacing: .62em; padding-left: .62em; color: rgba(230,223,207,.72); }
+#line {
+	margin-top: 14px; font-family: Menlo, "SF Mono", Consolas, monospace; font-size: 12px;
+	letter-spacing: .14em; color: rgba(157,150,138,.75);
 }
-
-#status-splash.fullsize--true {
-	height: 100%;
-	width: 100%;
-	object-fit: contain;
-}
-
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
-}
-
-#status-progress, #status-notice {
-	display: none;
-}
-
-#status-progress {
-	bottom: 10%;
-	width: 50%;
-	margin: 0 auto;
-}
-
+#status.leaving #words { opacity: 0; }
 #status-notice {
-	background-color: #5b3943;
-	border-radius: 0.5rem;
-	border: 1px solid #9b3943;
-	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
-	line-height: 1.3;
-	margin: 0 2rem;
-	overflow: hidden;
-	padding: 1rem;
-	text-align: center;
-	z-index: 1;
+	display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+	max-width: 34em; padding: 1.2em 1.6em; border: 1px solid rgba(230,223,207,.25);
+	background: rgba(13,11,9,.92); font: 14px/1.6 Menlo, monospace; color: #e6dfcf; text-align: left;
 }
-		</style>
-		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+</style>
+<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 
-	</head>
-	<body>
-		<canvas id="canvas">
-			Your browser does not support the canvas tag.
-		</canvas>
-
-		<noscript>
-			Your browser does not support JavaScript.
-		</noscript>
-
-		<div id="status">
-			<img id="status-splash" class="show-image--false fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
-			<div id="status-notice"></div>
-		</div>
-
-		<script src="index.js"></script>
-		<script>
+</head>
+<body>
+<canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+<noscript>Your browser does not support JavaScript.</noscript>
+<div id="status">
+	<canvas id="loader"></canvas>
+	<div id="words">
+		<div id="name">PENDING</div>
+		<div id="line"><span id="what">正在读取存档　Loading the save</span>　<span id="pct"></span></div>
+	</div>
+	<div id="status-notice"></div>
+</div>
+<script src="index.js"></script>
+<script>
 const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":58683688,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
+// ------------------------------------------------------------------ the loader drawing
+const Loader = (function () {
+	const cv = document.getElementById('loader');
+	const cx = cv.getContext('2d');
+	const N = 26;                 // footprints, as many as the parts of the load
+	let W = 0, H = 0, dpr = 1;
+	let target = 0, shown = 0;    // progress 0..1
+	let leaving = 0, leaveT = -1;
+	let t0 = performance.now();
+	let rnd = mulberry(33);
+	const prints = [];
+	const snow = [];
+	let grain = null;
+
+	function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+	function layout() {
+		dpr = Math.min(window.devicePixelRatio || 1, 2);
+		W = window.innerWidth; H = window.innerHeight;
+		cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+		cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		// the line of prints, from low left of centre up toward the pass at the upper right
+		const s = Math.min(W, H);
+		const a = { x: W * .5 - s * .26, y: H * .5 + s * .2 };
+		const b = { x: W * .5 + s * .26, y: H * .5 - s * .26 };
+		const r2 = mulberry(7);
+		prints.length = 0;
+		for (let i = 0; i < N; i++) {
+			const u = i / (N - 1);
+			const side = i % 2 ? 1 : -1;
+			const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy);
+			const nx = -dy / l, ny = dx / l;
+			prints.push({
+				x: a.x + dx * u + nx * side * s * .012 + (r2() - .5) * s * .006,
+				y: a.y + dy * u + ny * side * s * .012 + (r2() - .5) * s * .006,
+				r: s * (.0085 + r2() * .002), lit: 0, landT: -1
+			});
+		}
+		// paper grain, drawn once
+		grain = document.createElement('canvas');
+		grain.width = 256; grain.height = 256;
+		const g = grain.getContext('2d'), img = g.createImageData(256, 256), gr = mulberry(5);
+		for (let i = 0; i < img.data.length; i += 4) { const v = 12 + gr() * 16; img.data[i] = v + 4; img.data[i + 1] = v + 2; img.data[i + 2] = v; img.data[i + 3] = 255; }
+		g.putImageData(img, 0, 0);
+	}
+
+	function flake(fromTop) {
+		return { x: rnd() * W, y: fromTop ? -10 - rnd() * H * .3 : rnd() * H, v: 14 + rnd() * 30, r: .6 + rnd() * 1.4,
+			a: .15 + rnd() * .45, drift: (rnd() - .5) * 10, ph: rnd() * 6.28 };
+	}
+
+	function frame(now) {
+		const t = (now - t0) / 1000;
+		const dt = Math.min(.05, (now - (frame.last || now)) / 1000); frame.last = now;
+		shown += (target - shown) * Math.min(1, dt * 4);
+		if (leaveT >= 0) leaving = Math.min(1, (t - leaveT) / 1.6);
+		// paper
+		cx.fillStyle = cx.createPattern(grain, 'repeat'); cx.fillRect(0, 0, W, H);
+		const vg = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .2, W / 2, H / 2, Math.max(W, H) * .75);
+		vg.addColorStop(0, 'rgba(34,30,25,.0)'); vg.addColorStop(1, 'rgba(4,3,3,.85)');
+		cx.fillStyle = vg; cx.fillRect(0, 0, W, H);
+		// snow: keeps falling, faster as the page goes
+		while (snow.length < 140) snow.push(flake(snow.length > 60));
+		for (const f of snow) {
+			f.y += f.v * dt * (1 + leaving * 5); f.x += Math.sin(t * .7 + f.ph) * f.drift * dt;
+			if (f.y > H + 10) Object.assign(f, flake(true));
+			cx.fillStyle = 'rgba(230,223,207,' + (f.a * (1 - leaving * .5)).toFixed(3) + ')';
+			cx.beginPath(); cx.arc(f.x, f.y, f.r, 0, 6.283); cx.fill();
+		}
+		// footprints: each one lands as a falling light, then stays as a hole with a chalk rim
+		const n = shown * N;
+		for (let i = 0; i < N; i++) {
+			const p = prints[i];
+			const k = Math.max(0, Math.min(1, n - i));
+			if (k > 0 && p.landT < 0) p.landT = t;
+			if (p.landT < 0) {
+				// not yet: the faintest dent where it will be
+				cx.strokeStyle = 'rgba(157,150,138,.07)'; cx.lineWidth = 1;
+				cx.beginPath(); cx.ellipse(p.x, p.y, p.r, p.r * .72, -.5, 0, 6.283); cx.stroke();
+				continue;
+			}
+			const age = t - p.landT;
+			const fall = Math.min(1, age / .5);
+			if (fall < 1) {
+				// the light falling into place
+				const y = p.y - (1 - fall * fall) * Math.min(W, H) * .18;
+				cx.fillStyle = 'rgba(255,246,226,' + (.9 * fall).toFixed(3) + ')';
+				cx.beginPath(); cx.arc(p.x, y, 2, 0, 6.283); cx.fill();
+			}
+			const landed = Math.max(0, Math.min(1, (age - .4) / .5)) * k;
+			if (landed <= 0) continue;
+			const glow = Math.exp(-Math.max(0, age - .45) * 2.2) + leaving * .9;
+			// hole
+			cx.fillStyle = 'rgba(8,7,6,' + (.9 * landed).toFixed(3) + ')';
+			cx.beginPath(); cx.ellipse(p.x, p.y, p.r, p.r * .72, -.5, 0, 6.283); cx.fill();
+			// chalk rim on the upper side
+			cx.strokeStyle = 'rgba(230,223,207,' + ((.45 + .4 * glow) * landed).toFixed(3) + ')';
+			cx.lineWidth = 1.2;
+			cx.beginPath(); cx.ellipse(p.x, p.y - .6, p.r * 1.15, p.r * .86, -.5, Math.PI * 1.05, Math.PI * 1.9); cx.stroke();
+			// a little light at its bottom, from far below
+			if (glow > .02) {
+				const rg = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3.2);
+				rg.addColorStop(0, 'rgba(255,217,138,' + (.35 * glow * landed).toFixed(3) + ')'); rg.addColorStop(1, 'rgba(255,217,138,0)');
+				cx.fillStyle = rg; cx.beginPath(); cx.arc(p.x, p.y, p.r * 3.2, 0, 6.283); cx.fill();
+			}
+		}
+		if (leaving < 1) requestAnimationFrame(frame);
+	}
+
+	window.addEventListener('resize', layout);
+	layout();
+	requestAnimationFrame(frame);
+	return {
+		progress(v) { target = Math.max(target, Math.min(1, v)); },
+		leave() { target = 1; leaveT = (performance.now() - t0) / 1000 + .5; },
+	};
+}());
+
+// ------------------------------------------------------------------ the engine
 (function () {
 	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
 	const statusNotice = document.getElementById('status-notice');
-
+	const pct = document.getElementById('pct');
+	const what = document.getElementById('what');
 	let initializing = true;
-	let statusMode = '';
-
-	function setStatusMode(mode) {
-		if (statusMode === mode || !initializing) {
-			return;
-		}
-		if (mode === 'hidden') {
-			statusOverlay.remove();
-			initializing = false;
-			return;
-		}
-		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
-		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
-		statusMode = mode;
-	}
-
-	function setStatusNotice(text) {
-		while (statusNotice.lastChild) {
-			statusNotice.removeChild(statusNotice.lastChild);
-		}
-		const lines = text.split('\n');
-		lines.forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
-			statusNotice.appendChild(document.createElement('br'));
-		});
-	}
 
 	function displayFailureNotice(err) {
 		console.error(err);
-		if (err instanceof Error) {
-			setStatusNotice(err.message);
-		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
-		}
-		setStatusMode('notice');
+		const text = err instanceof Error ? err.message : (typeof err === 'string' ? err : 'An unknown error occurred.');
+		statusNotice.textContent = '';
+		text.split('\n').forEach((line) => { statusNotice.appendChild(document.createTextNode(line)); statusNotice.appendChild(document.createElement('br')); });
+		statusNotice.style.display = 'block';
+		document.getElementById('words').style.display = 'none';
 		initializing = false;
 	}
 
-	const missing = Engine.getMissingFeatures({
-		threads: GODOT_THREADS_ENABLED,
-	});
-
+	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 	if (missing.length !== 0) {
-		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
-			let serviceWorkerRegistrationPromise;
-			try {
-				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
-			} catch (err) {
-				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
-			}
-			// There's a chance that installing the service worker would fix the issue
-			Promise.race([
-				serviceWorkerRegistrationPromise.then((registration) => {
-					if (registration != null) {
-						return Promise.reject(new Error('Service worker already exists.'));
-					}
-					return registration;
-				}).then(() => engine.installServiceWorker()),
-				// For some reason, `getRegistration()` can stall
-				new Promise((resolve) => {
-					setTimeout(() => resolve(), 2000);
-				}),
-			]).then(() => {
-				// Reload if there was no error.
-				window.location.reload();
-			}).catch((err) => {
-				console.error('Error while registering service worker:', err);
-			});
-		} else {
-			// Display the message as usual
-			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
-			displayFailureNotice(missingMsg + missing.join('\n'));
-		}
-	} else {
-		setStatusMode('progress');
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
+		displayFailureNotice('这个浏览器缺少运行所需的功能。\nThis browser is missing features the game needs:\n' + missing.join('\n'));
+		return;
 	}
+	const sizes = GODOT_CONFIG.fileSizes || {};
+	const estimate = Object.keys(sizes).reduce((s, k) => s + sizes[k], 0);
+	engine.startGame({
+		'onProgress': function (current, total) {
+			const tot = total > 0 ? total : estimate;
+			if (initializing && current > 0 && tot > 0) {
+				const v = Math.min(1, current / tot);
+				Loader.progress(v * .97);
+				pct.textContent = Math.floor(v * 100) + '%';
+			}
+		},
+	}).then(() => {
+		if (!initializing) return;
+		initializing = false;
+		Loader.progress(1);
+		pct.textContent = '';
+		what.textContent = '读取完毕　Loaded';
+		Loader.leave();
+		setTimeout(() => statusOverlay.classList.add('leaving'), 700);
+		setTimeout(() => statusOverlay.remove(), 2600);
+	}, displayFailureNotice);
 }());
-		</script>
-	</body>
+</script>
+</body>
 </html>
 
