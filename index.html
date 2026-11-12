@@ -200,6 +200,8 @@ const Loader = (function () {
 	const sizes = GODOT_CONFIG.fileSizes || {};
 	const estimate = Object.keys(sizes).reduce((s, k) => s + sizes[k], 0);
 	engine.startGame({
+		// the game opens in English whatever the browser's language; a language the player chose is kept
+		'locale': 'en',
 		'onProgress': function (current, total) {
 			const tot = total > 0 ? total : estimate;
 			if (initializing && current > 0 && tot > 0) {
